@@ -50,9 +50,6 @@ class Server extends Actor {
   }
 }
 
-// MAYBE: Project .pdf mentions only one client, maybe turn this into a non-actor class?
-//        Makes it easier to run, manipulate and extend (considering the Zipf distribution
-//        we still have to include in this).
 class Client(servers: List[ActorRef], quorum: Int, degree_of_replication: Int) extends Actor {
   def pick_servers(key: String): List[ActorRef] = {
     val start = Math.abs(key.hashCode() % degree_of_replication)
