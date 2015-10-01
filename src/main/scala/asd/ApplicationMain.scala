@@ -50,19 +50,30 @@ class Server extends Actor {
   }
 }
 
+// MAYBE: Project .pdf mentions only one client, maybe turn this into a non-actor class?
+//        Makes it easier to run, manipulate and extend (considering the Zipf distribution
+//        we still have to include in this).
 class Client(servers: List[ActorRef], quorum: Int, degree_of_replication: Int) extends Actor {
+  def pick_servers(key: String): List[ActorRef] = {
+    val start = Math.abs(key.hashCode() % degree_of_replication)
+    var picked = servers.slice(start, start + degree_of_replication)
+    if (picked.size < degree_of_replication) {
+      picked ++= servers.slice(0, degree_of_replication - picked.size)
+    }
+
+    picked
+  }
+
   def receive = {
     case Put(key, value) => {
       implicit val system = ActorSystem("ASD")
       implicit val box = inbox()
-      //TODO: use hash(key) % degree_of_replication to pick servers
-      servers.foreach((s) => {
+      pick_servers(key).foreach((s) => {
         box.send(s, ReadTag(key))
       })
 
       var highest_tagmax = -1
       for (i <- 1 to quorum) {
-        //val msg = box.receive()
         val tagmax = box.select() {
           case Tag(tagmax, _) => highest_tagmax
         }
@@ -91,6 +102,7 @@ class Client(servers: List[ActorRef], quorum: Int, degree_of_replication: Int) e
 
 object KVStore extends App {
   def main(args: List[String]) = {
+    // TODO: launch the server and client actors
   }
 }
 
