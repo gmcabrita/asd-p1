@@ -65,24 +65,31 @@ class Client(servers: List[ActorRef], quorum: Int, degree_of_replication: Int) e
     case Put(key, value) => {
       implicit val system = ActorSystem("ASD")
       implicit val box = inbox()
+
+      // send readtags to n servers
       pick_servers(key).foreach((s) => {
         box.send(s, ReadTag(key))
       })
 
+      // wait for the quorum of answers
       var highest_tagmax = -1
       for (i <- 1 to quorum) {
         val tagmax = box.select() {
           case Tag(tm, _) => tm
         }
+
+        // grab the highest tagmax
         if (tagmax > highest_tagmax) {
           highest_tagmax = tagmax
         }
       }
 
+      // send writes to the n servers
       servers.foreach((s) => {
         box.send(s, Write(highest_tagmax + 1, key, value))
       })
 
+      // wait for quorum of acks
       for (i <- 1 to quorum) {
         box.select() {
           case Ack => ()
