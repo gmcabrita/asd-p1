@@ -17,6 +17,7 @@ case class Read(key: String)
 case class Ack()
 case class Put(key: String, value: String)
 case class Get(key: String)
+case class GetResult(value: String)
 
 class Server extends Actor {
   val store = new ParHashMap[String, TagValue]
@@ -136,7 +137,7 @@ class Client(servers: List[ActorRef], quorum: Int, degree_of_replication: Int) e
         }
       }
 
-      Ack
+      GetResult(highest_tagvalue.value)
     }
   }
 }
