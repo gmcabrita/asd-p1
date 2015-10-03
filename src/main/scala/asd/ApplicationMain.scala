@@ -72,7 +72,7 @@ class Client(servers: List[ActorRef], quorum: Int, degree_of_replication: Int) e
       var highest_tagmax = -1
       for (i <- 1 to quorum) {
         val tagmax = box.select() {
-          case Tag(tagmax, _) => highest_tagmax
+          case Tag(tm, _) => tm
         }
         if (tagmax > highest_tagmax) {
           highest_tagmax = tagmax
