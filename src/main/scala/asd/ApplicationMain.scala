@@ -92,7 +92,43 @@ class Client(servers: List[ActorRef], quorum: Int, degree_of_replication: Int) e
       Ack
     }
     case Get(key) => {
-      // TODO: implement
+      implicit val system = ActorSystem("ASD")
+      implicit val box = inbox()
+      val picked_servers = pick_servers(key)
+
+      // send reads to n servers
+      picked_servers.foreach((s) => {
+        box.send(s, Read(key))
+      })
+
+      // wait for quorum of answers
+      var highest_tagvalue = TagValue(Tag(-1, null), null)
+      for (i <- 1 to quorum) {
+        val tagvalue = box.select() {
+          case tv: TagValue => tv
+        }
+
+        // grab the highest <tagmax,valmax> tuple
+        if (tagvalue.tag.tagmax > highest_tagvalue.tag.tagmax ||
+            (tagvalue.tag.tagmax == highest_tagvalue.tag.tagmax &&
+              tagvalue.tag.actor_ref.compareTo(highest_tagvalue.tag.actor_ref) > 0)) {
+          highest_tagvalue = tagvalue
+        }
+      }
+
+      // send writes to the n servers (for replicating)
+      picked_servers.foreach((s) => {
+        box.send(s, Write(highest_tagvalue.tag.tagmax, key, highest_tagvalue.value))
+      })
+
+      // wait for quorum of acks
+      for (i <- 1 to quorum) {
+        box.select() {
+          case Ack => ()
+        }
+      }
+
+      Ack
     }
   }
 }
