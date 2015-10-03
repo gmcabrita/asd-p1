@@ -65,9 +65,10 @@ class Client(servers: List[ActorRef], quorum: Int, degree_of_replication: Int) e
     case Put(key, value) => {
       implicit val system = ActorSystem("ASD")
       implicit val box = inbox()
+      val picked_servers = pick_servers(key)
 
       // send readtags to n servers
-      pick_servers(key).foreach((s) => {
+      picked_servers.foreach((s) => {
         box.send(s, ReadTag(key))
       })
 
@@ -85,7 +86,7 @@ class Client(servers: List[ActorRef], quorum: Int, degree_of_replication: Int) e
       }
 
       // send writes to the n servers
-      servers.foreach((s) => {
+      picked_servers.foreach((s) => {
         box.send(s, Write(highest_tagmax + 1, key, value))
       })
 
