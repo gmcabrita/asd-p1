@@ -2,7 +2,6 @@ package asd
 
 import akka.actor.Actor
 import akka.actor.ActorRef
-import akka.actor.ActorDSL._
 import scala.collection.parallel.mutable.ParHashMap
 
 class Server extends Actor {
