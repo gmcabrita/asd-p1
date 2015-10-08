@@ -1,19 +1,20 @@
 package asd
 
-import akka.actor.Actor
 import akka.actor.ActorRef
 import akka.actor.ActorSystem
 import akka.actor.Props
-import akka.actor.ActorDSL._
 import akka.pattern.ask
 import akka.util.Timeout
 import scala.concurrent.Await
 import scala.concurrent.Future
 import scala.concurrent.duration._
-import scala.collection.parallel.mutable.ParHashMap
-import scala.collection.mutable.MutableList
 
-case class Tag(tagmax: Int, actor_ref: ActorRef)
+case class Tag(tagmax: Int, actor_ref: ActorRef) {
+  // this > that
+  def compareTo(that: Tag): Boolean = {
+    this.tagmax > that.tagmax || (this.tagmax == that.tagmax && this.actor_ref.compareTo(that.actor_ref) > 0)
+  }
+}
 case class TagValue(tag: Tag, value: String)
 
 // Messages
@@ -25,146 +26,19 @@ case class Put(key: String, value: String)
 case class Get(key: String)
 case class GetResult(value: String)
 
-class Server extends Actor {
-  var store = new ParHashMap[String, TagValue]
-  val default_tag = Tag(-1, null)
-  val default_tagvalue = TagValue(default_tag, null)
-
-  def receive = {
-    case Write(tagmax, key, value) => {
-      val old_tag = store.get(key) match {
-        case Some(tv) => tv.tag
-        case None => default_tag
-      }
-
-      if (tagmax > old_tag.tagmax || (tagmax == old_tag.tagmax && sender.compareTo(old_tag.actor_ref) > 0)) {
-        val tv = TagValue(Tag(tagmax, sender), value)
-        store.put(key, tv)
-      }
-
-      sender ! Ack
-    }
-    case ReadTag(key) => {
-      val tag = store.get(key) match {
-        case Some(tv) => tv.tag
-        case None  => default_tag
-      }
-
-      sender ! tag
-    }
-    case Read(key) => {
-      val tv = store.get(key) match {
-        case Some(tv) => tv
-        case None => default_tagvalue
-      }
-      sender ! tv
-    }
-  }
-}
-
-class Client(servers: List[ActorRef], quorum: Int, degree_of_replication: Int) extends Actor {
-  def pick_servers(key: String): List[ActorRef] = {
-    val start = Math.abs(key.hashCode() % degree_of_replication)
-    var picked = servers.slice(start, start + degree_of_replication)
-    if (picked.size < degree_of_replication) {
-      picked ++= servers.slice(0, degree_of_replication - picked.size)
-    }
-
-    picked
-  }
-
-  def receive = {
-    case Put(key, value) => {
-      implicit val system = ActorSystem("ASD")
-      implicit val box = inbox()
-      val picked_servers = pick_servers(key)
-
-      // send readtags to n servers
-      picked_servers.foreach((s) => {
-        box.send(s, ReadTag(key))
-      })
-
-      // wait for the quorum of answers
-      var highest_tagmax = -1
-      for (i <- 1 to quorum) {
-        val tagmax = box.select() {
-          case Tag(tm, _) => tm
-        }
-
-        // grab the highest tagmax
-        if (tagmax > highest_tagmax) {
-          highest_tagmax = tagmax
-        }
-      }
-
-      // send writes to the n servers
-      picked_servers.foreach((s) => {
-        box.send(s, Write(highest_tagmax + 1, key, value))
-      })
-
-      // wait for quorum of acks
-      for (i <- 1 to quorum) {
-        box.select() {
-          case Ack => ()
-        }
-      }
-
-      box.send(sender, Ack)
-    }
-    case Get(key) => {
-      implicit val system = ActorSystem("ASD")
-      implicit val box = inbox()
-      val picked_servers = pick_servers(key)
-
-      // send reads to n servers
-      picked_servers.foreach((s) => {
-        box.send(s, Read(key))
-      })
-
-      // wait for quorum of answers
-      var highest_tagvalue = TagValue(Tag(-1, null), null)
-      for (i <- 1 to quorum) {
-        val tagvalue = box.select() {
-          case tv: TagValue => tv
-        }
-
-        // grab the highest <tagmax,valmax> tuple
-        if (tagvalue.tag.tagmax > highest_tagvalue.tag.tagmax ||
-            (tagvalue.tag.tagmax == highest_tagvalue.tag.tagmax &&
-              tagvalue.tag.actor_ref.compareTo(highest_tagvalue.tag.actor_ref) > 0)) {
-          highest_tagvalue = tagvalue
-        }
-      }
-
-      // send writes to the n servers (for replicating)
-      picked_servers.foreach((s) => {
-        box.send(s, Write(highest_tagvalue.tag.tagmax, key, highest_tagvalue.value))
-      })
-
-      // wait for quorum of acks
-      for (i <- 1 to quorum) {
-        box.select() {
-          case Ack => ()
-        }
-      }
-
-      box.send(sender, GetResult(highest_tagvalue.value))
-    }
-  }
-}
-
 object KVStore extends App {
   implicit val system = ActorSystem("APP")
   implicit val timeout = Timeout(5 seconds)
-  def get(client: ActorRef, key: String): String = {
-    return Await.result(client.ask(Get(key)), timeout.duration) match {
-      case GetResult(x) => x
-      case _ => null
+
+  def get(client: ActorRef, key: String) = {
+    Await.result(client.ask(Get(key)), timeout.duration) match {
+      case Some(GetResult(x)) => println(x)
+      case None => println("Value does not exist.")
     }
   }
 
   def put(client: ActorRef, key: String, value: String): Boolean = {
-    return Await.result(client.ask(Put(key, value)), timeout.duration) match {
+    Await.result(client.ask(Put(key, value)), timeout.duration) match {
       case Ack => true
       case _ => false
     }
@@ -177,12 +51,11 @@ object KVStore extends App {
   val c1 = system.actorOf(Props(new Client(servers, quorum, degree_of_replication)))
   val c2 = system.actorOf(Props(new Client(servers, quorum, degree_of_replication)))
 
+  get(c1, "a")
+
   println(put(c1, "a", "b"))
   println(put(c2, "a", "c"))
 
-  println(get(c1, "a"))
-  println(get(c2, "a"))
+  get(c1, "a")
+  get(c2, "a")
 }
-
-// 2. The second variant should provide linearizability.
-// Make reads only take one phase
