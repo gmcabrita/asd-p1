@@ -25,6 +25,7 @@ case class Ack()
 case class Put(key: String, value: String)
 case class Get(key: String)
 case class GetResult(value: String)
+case class Delay(ms: Int) // milliseconds
 
 object KVStore extends App {
   implicit val system = ActorSystem("APP")
@@ -45,6 +46,10 @@ object KVStore extends App {
   }
 
   val servers = (1 to 30).toList.map(_ => system.actorOf(Props[Server]))
+  servers.foreach(u => {
+    Await.result(u.ask(Delay(10000)), timeout.duration)
+    //system.stop(u)
+  })
   val quorum = 3
   val degree_of_replication = 5
 
