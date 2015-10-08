@@ -47,7 +47,7 @@ object KVStore extends App {
 
   val servers = (1 to 30).toList.map(_ => system.actorOf(Props[Server]))
   servers.foreach(u => {
-    Await.result(u.ask(Delay(10000)), timeout.duration)
+    //Await.result(u.ask(Delay(4000)), timeout.duration)
     //system.stop(u)
   })
   val quorum = 3

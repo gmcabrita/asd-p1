@@ -7,8 +7,17 @@ import scala.concurrent.duration._
 import scala.concurrent.ExecutionContext.Implicits.global
 
 class Server extends Actor {
+  case object WakeUp
   var store = new ParHashMap[String, TagValue]
   var delay: FiniteDuration = FiniteDuration(0, "millis")
+
+  def injectDelay(ops: () => Unit) = {
+    context.system.scheduler.scheduleOnce(delay, self, WakeUp)
+    context.become({
+      case WakeUp => context.unbecome()
+      ops()
+    }, discardOld = false)
+  }
 
   def receive = {
     case Write(tagmax, key, value) => {
@@ -25,7 +34,10 @@ class Server extends Actor {
         }
       }
 
-      sender ! Ack
+      val client = sender
+      injectDelay({
+        () => client ! Ack
+      })
     }
     case ReadTag(key) => {
       val tag = store.get(key) match {
@@ -33,16 +45,16 @@ class Server extends Actor {
         case None  => None
       }
 
-      sender ! tag
+      val client = sender
+      injectDelay({
+        () => client ! tag
+      })
     }
     case Read(key) => {
-      case object WakeUp
-      val client = sender // avoid shadowing of sender inside context.become
-      context.system.scheduler.scheduleOnce(delay, self, WakeUp)
-      context.become({
-        case WakeUp => context.unbecome()
-        client ! store.get(key)
-      }, discardOld = false)
+      val client = sender
+      injectDelay({
+        () => client ! store.get(key)
+      })
     }
 
     // fault injection
