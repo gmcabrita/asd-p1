@@ -8,7 +8,6 @@ import scala.concurrent.ExecutionContext.Implicits.global
 
 class Server extends Actor {
   var store = new ParHashMap[String, TagValue]
-  var stopped = false
   var delay: FiniteDuration = FiniteDuration(0, "millis")
 
   def receive = {
