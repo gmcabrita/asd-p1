@@ -29,6 +29,8 @@ class Client(servers: List[ActorRef], quorum: Int, degree_of_replication: Int) e
     })
 
     // wait for quorum of answers
+    // TODO: we need to handle timeouts
+    //       what should we do when it timeouts? restart, or simply fail?
     val highest_tagvalue = (1 to quorum).fold(None)((acc, _) => {
       box.select() {
         case Some(tagvalue: TagValue) => {
@@ -53,6 +55,7 @@ class Client(servers: List[ActorRef], quorum: Int, degree_of_replication: Int) e
         })
 
         // wait for quorum of acks
+        // TODO: handle timeouts here as well!
         for (i <- 1 to quorum) {
           box.select() {
             case Ack => ()
@@ -76,6 +79,7 @@ class Client(servers: List[ActorRef], quorum: Int, degree_of_replication: Int) e
 
 
     // wait for the quorum of answers
+    // TODO: handle timeouts
     val highest_tagmax = (1 to quorum).fold(-1)((highest_tagmax, _) => {
       val tagmax = box.select() {
         case Some(Tag(tm, _)) => tm
@@ -95,6 +99,7 @@ class Client(servers: List[ActorRef], quorum: Int, degree_of_replication: Int) e
     })
 
     // wait for quorum of acks
+    // TODO: handle timeouts
     for (i <- 1 to quorum) {
       box.select() {
         case Ack => ()

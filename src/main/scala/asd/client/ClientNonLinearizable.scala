@@ -16,6 +16,7 @@ class ClientNonLinearizable(servers: List[ActorRef], quorum: Int, degree_of_repl
     })
 
     // wait for quorum of answers
+    // TODO: handle timeouts!
     val highest_tagvalue = (1 to quorum).fold(None)((acc, _) => {
       box.select() {
         case Some(tagvalue: TagValue) => {
