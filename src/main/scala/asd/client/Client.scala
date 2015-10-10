@@ -40,7 +40,9 @@ class Client(servers: List[ActorRef], quorum: Int, degree_of_replication: Int) e
             }
           }
         }
-        case None => acc
+        case None => {
+          acc
+        }
       }
     })
 
