@@ -1,8 +1,9 @@
 package asd
 
 import asd.evaluation.LocalNoFailureEvaluation
+import asd._
 
-import akka.actor.ActorRef
+import akka.actor.{ActorRef, Props, ActorSystem}
 
 case class Tag(tagmax: Int, actor_ref: ActorRef) {
   // this > that
@@ -22,22 +23,29 @@ case class Get(key: String)
 case class GetResult(value: String)
 case class Delay(ms: Int) // milliseconds
 
+case class Timedout()
+case class Start()
+
 object KVStore extends App {
+  implicit val system = ActorSystem("MAIN")
+
   // zipf
   // 1000 keys
   // read/write ratios: 90/10, 50/50, 10/90
   // spawn 1 / 4 / 8 / 12 clients
   // 12 servers in one machine
-  val eval = new LocalNoFailureEvaluation(
+  val eval = system.actorOf(Props(new LocalNoFailureEvaluation(
     1000, // num keys
-    1, // num clients
+    16, // num clients
     12, // num servers
-    4, // quorum
-    7, // degree of replication
+    3, // quorum
+    5, // degree of replication
     (90, 10), // rw ratio
-    192371441 // seed
-  )
+    192371441, // seed
+    true // linearizable?
+  )))
 
-  eval.run()
-  sys.exit(0)
+  eval ! Start
+  //eval.run()
+  //sys.exit(0)
 }

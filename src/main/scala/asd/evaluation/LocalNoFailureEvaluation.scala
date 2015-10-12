@@ -1,11 +1,9 @@
 package asd.evaluation
 
 import asd.rand.Zipf
-import asd.Client
-import asd.ClientNonLinearizable
-import asd.Server
 import asd._
 
+import akka.actor.Actor
 import akka.actor.ActorRef
 import akka.actor.ActorSystem
 import akka.actor.Props
@@ -17,45 +15,70 @@ import scala.concurrent.Future
 import scala.concurrent.duration._
 import scala.util.Random
 
-class LocalNoFailureEvaluation(number_of_keys: Int, number_of_clients: Int, number_of_servers: Int, quorum: Int, degree_of_replication: Int, rw_ratio: (Int, Int), seed: Int) {
+import scala.concurrent.ExecutionContext.Implicits.global
+
+import scala.reflect.ClassTag
+import scala.reflect._
+
+import akka.event.Logging
+import akka.event.LoggingAdapter
+
+class LocalNoFailureEvaluation(number_of_keys: Int, number_of_clients: Int, number_of_servers: Int, quorum: Int, degree_of_replication: Int, rw_ratio: (Int, Int), seed: Int, linearizable: Boolean) extends Actor {
   val zipf = new Zipf(number_of_keys, seed)
   val r = new Random(seed)
   implicit val system = ActorSystem("EVAL")
   implicit val timeout = Timeout(10 seconds)
+  val log = Logging.getLogger(system, this)
 
-  def spawn_servers(): Vector[ActorRef] = (1 to number_of_servers).toVector.map(_ => system.actorOf(Props[Server]))
-  def spawn_clients(servers: Vector[ActorRef]): Vector[ActorRef] = (1 to number_of_clients).toVector.map(_ => system.actorOf(Props(new Client(servers.toList, quorum, degree_of_replication))))
+  val servers: Vector[ActorRef] = (1 to number_of_servers).toVector.map(_ => system.actorOf(Props[Server]))
+  val clients: Vector[ActorRef] = (1 to number_of_clients).toVector.map(_ => {
+    if (linearizable) system.actorOf(Props(new ClientNonBlocking(servers.toList, quorum, degree_of_replication)))
+    else system.actorOf(Props(new ClientNonBlockingNonLinearizable(servers.toList, quorum, degree_of_replication)))
+  })
 
-  def run() = {
-    val servers = spawn_servers()
-    val clients = spawn_clients(servers)
+  var operations = 10000
+  var reads: Long = 0
+  var writes: Long = 0
 
-    var writes = 0
-    var reads = 0
+  var begin: Long = 0
+  var end: Long = 0
 
-    val begin = System.nanoTime
+  def continue(actr: ActorRef) = {
+     operations -= 1
 
-    val stuff = (1 to 100000).par.map(_ => {
-      val float = r.nextFloat()
-      val client = clients(r.nextInt(clients.length))
-      val key = zipf.nextZipf().toString
-      if (float > (rw_ratio._2 / 100f)) { // read
-        Await.result(client.ask(Get(key)), timeout.duration)
-        reads += 1
-      } else { // write
-        val value = r.nextString(16)
-        Await.result(client.ask(Put(key, value)), timeout.duration)
-        writes += 1
+    if (operations == 0) {
+      end = System.nanoTime
+      println("reads: " + reads)
+      println("writes: " + writes)
+      println("elapsed time: " + (end - begin)/1e6+"ms")
+      sys.exit(0)
+    }
+
+    actr ! gen_op()
+  }
+
+  def gen_op() = {
+    val float = r.nextFloat()
+    val key = zipf.nextZipf().toString
+    if (float > (rw_ratio._2 / 100f)) { // read
+      reads += 1
+      Get(key)
+    } else { // write
+      val value = r.nextString(16)
+      writes += 1
+      Put(key, value)
+    }
+  }
+
+  def receive = {
+    case Start => {
+      begin = System.nanoTime
+      operations -= number_of_clients
+      //clients.foreach(_ ! gen_op())
+      for (i <- 0 to number_of_clients - 1) {
+        system.scheduler.scheduleOnce(5*i millis, clients(i), gen_op)
       }
-    })
-
-    val end = System.nanoTime
-
-    println("reads: " + reads)
-    println("writes: " + writes)
-    println("elapsed time: " + (end - begin)/1e6+"ms")
-
-    clients.par.foreach(x => system.stop(x))
-    servers.par.foreach(x => system.stop(x))
+    }
+    case _ => continue(sender)
   }
 }
