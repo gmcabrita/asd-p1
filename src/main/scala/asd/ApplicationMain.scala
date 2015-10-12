@@ -23,6 +23,11 @@ case class GetResult(value: String)
 case class Delay(ms: Int) // milliseconds
 
 object KVStore extends App {
+  // zipf
+  // 1000 keys
+  // read/write ratios: 90/10, 50/50, 10/90
+  // spawn 1 / 4 / 8 / 12 clients
+  // 12 servers in one machine
   val eval = new LocalNoFailureEvaluation(
     1000, // num keys
     1, // num clients

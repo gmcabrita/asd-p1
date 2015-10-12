@@ -57,18 +57,5 @@ class LocalNoFailureEvaluation(number_of_keys: Int, number_of_clients: Int, numb
 
     clients.par.foreach(x => system.stop(x))
     servers.par.foreach(x => system.stop(x))
-    // how to distribute the read/writes over the 1000 keys?
-    // idea is to send away all the requests and then Await for all of them at the end and then halt the execution
   }
-
-  // client.ask(Get(key))
-  // client.ask(Put(key, value))
-  // put every future into `everything`
-  // everything.reduce(x => Await.result(x, timeout.duration)) before exiting
 }
-
-// zipf
-// 1000 keys
-// read/write ratios: 90/10, 50/50, 10/90
-// spawn 1 / 4 / 8 / 12 clients
-// 12 servers in one machine
