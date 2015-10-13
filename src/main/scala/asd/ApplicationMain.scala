@@ -36,7 +36,7 @@ object KVStore extends App {
   // 12 servers in one machine
   val eval = system.actorOf(Props(new LocalNoFailureEvaluation(
     1000, // num keys
-    16, // num clients
+    12, // num clients
     12, // num servers
     3, // quorum
     5, // degree of replication
