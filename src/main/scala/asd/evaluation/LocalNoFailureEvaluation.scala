@@ -20,7 +20,7 @@ import scala.concurrent.ExecutionContext.Implicits.global
 import scala.reflect.ClassTag
 import scala.reflect._
 
-class LocalNoFailureEvaluation(number_of_keys: Int, number_of_clients: Int, number_of_servers: Int, quorum: Int, degree_of_replication: Int, seed: Int, linearizable: Boolean, max_operations: Int) extends Actor {
+class LocalNoFailureEvaluation(number_of_keys: Int, number_of_clients: Int, number_of_servers: Int, quorum: Int, degree_of_replication: Int, seed: Int, linearizable: Boolean, max_operations: Int, faults: Int) extends Actor {
   val zipf = new Zipf(number_of_keys, seed)
   val r = new Random(seed)
   implicit val system = ActorSystem("EVAL")
@@ -33,7 +33,8 @@ class LocalNoFailureEvaluation(number_of_keys: Int, number_of_clients: Int, numb
   })
 
   // fault injection
-  // (0 to 4).foreach(i => system.stop(servers(i)))
+  val fault_rand = new Random()
+  r.shuffle(0 to number_of_clients - 1).take(faults).foreach(i => system.stop(servers(i)))
 
   var operations = max_operations
   var reads: Long = 0

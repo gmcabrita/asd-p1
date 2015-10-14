@@ -37,7 +37,8 @@ object KVStore extends App {
     12, // degree of replication
     192371441, // seed
     true, // linearizable?
-    50000 // number of operations
+    50000, // number of operations
+    5 // number of injected faults
   )))
 
   eval ! Start
