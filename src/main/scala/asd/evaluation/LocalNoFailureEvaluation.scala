@@ -20,15 +20,11 @@ import scala.concurrent.ExecutionContext.Implicits.global
 import scala.reflect.ClassTag
 import scala.reflect._
 
-import akka.event.Logging
-import akka.event.LoggingAdapter
-
-class LocalNoFailureEvaluation(number_of_keys: Int, number_of_clients: Int, number_of_servers: Int, quorum: Int, degree_of_replication: Int, rw_ratio: (Int, Int), seed: Int, linearizable: Boolean) extends Actor {
+class LocalNoFailureEvaluation(number_of_keys: Int, number_of_clients: Int, number_of_servers: Int, quorum: Int, degree_of_replication: Int, seed: Int, linearizable: Boolean, max_operations: Int) extends Actor {
   val zipf = new Zipf(number_of_keys, seed)
   val r = new Random(seed)
   implicit val system = ActorSystem("EVAL")
   implicit val timeout = Timeout(10 seconds)
-  val log = Logging.getLogger(system, this)
 
   val servers: Vector[ActorRef] = (1 to number_of_servers).toVector.map(_ => system.actorOf(Props[Server]))
   val clients: Vector[ActorRef] = (1 to number_of_clients).toVector.map(_ => {
@@ -36,12 +32,18 @@ class LocalNoFailureEvaluation(number_of_keys: Int, number_of_clients: Int, numb
     else system.actorOf(Props(new ClientNonBlockingNonLinearizable(servers.toList, quorum, degree_of_replication)))
   })
 
-  var operations = 10000
+  // fault injection
+  // (0 to 4).foreach(i => system.stop(servers(i)))
+
+  var operations = max_operations
   var reads: Long = 0
   var writes: Long = 0
 
   var begin: Long = 0
   var end: Long = 0
+
+  var run: Int = 0
+  var rw_ratio = (90, 10)
 
   def continue(actr: ActorRef) = {
      operations -= 1
@@ -51,7 +53,15 @@ class LocalNoFailureEvaluation(number_of_keys: Int, number_of_clients: Int, numb
       println("reads: " + reads)
       println("writes: " + writes)
       println("elapsed time: " + (end - begin)/1e6+"ms")
-      sys.exit(0)
+
+      rw_ratio = (rw_ratio._1 - 40, rw_ratio._2 + 40)
+      begin = System.nanoTime
+      operations = max_operations
+      reads = 0
+      writes = 0
+
+      run += 1
+      if (run == 3) sys.exit(0)
     }
 
     actr ! gen_op()
@@ -74,10 +84,7 @@ class LocalNoFailureEvaluation(number_of_keys: Int, number_of_clients: Int, numb
     case Start => {
       begin = System.nanoTime
       operations -= number_of_clients
-      //clients.foreach(_ ! gen_op())
-      for (i <- 0 to number_of_clients - 1) {
-        system.scheduler.scheduleOnce(5*i millis, clients(i), gen_op)
-      }
+      clients.foreach(_ ! gen_op())
     }
     case _ => continue(sender)
   }

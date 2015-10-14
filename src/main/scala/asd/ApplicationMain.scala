@@ -29,23 +29,16 @@ case class Start()
 object KVStore extends App {
   implicit val system = ActorSystem("MAIN")
 
-  // zipf
-  // 1000 keys
-  // read/write ratios: 90/10, 50/50, 10/90
-  // spawn 1 / 4 / 8 / 12 clients
-  // 12 servers in one machine
   val eval = system.actorOf(Props(new LocalNoFailureEvaluation(
     1000, // num keys
     12, // num clients
     12, // num servers
-    3, // quorum
-    5, // degree of replication
-    (90, 10), // rw ratio
+    7, // quorum
+    12, // degree of replication
     192371441, // seed
-    true // linearizable?
+    true, // linearizable?
+    50000 // number of operations
   )))
 
   eval ! Start
-  //eval.run()
-  //sys.exit(0)
 }
