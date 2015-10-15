@@ -1,5 +1,6 @@
 package asd
 
+import asd.message._
 import akka.actor.Actor
 import akka.actor.ActorRef
 import scala.collection.parallel.mutable.ParHashMap
@@ -35,9 +36,9 @@ class Server extends Actor {
       }
 
       val client = sender
-      injectDelay({
-        () => client ! Ack
-      })
+      //injectDelay({
+        /*() => */client ! Ack
+      //})
     }
     case ReadTag(key) => {
       val tag = store.get(key) match {
@@ -46,15 +47,15 @@ class Server extends Actor {
       }
 
       val client = sender
-      injectDelay({
-        () => client ! tag
-      })
+      //injectDelay({
+        /*() => */client ! tag
+      //})
     }
     case Read(key) => {
       val client = sender
-      injectDelay({
-        () => client ! store.get(key)
-      })
+      //injectDelay({
+        /*() => */client ! store.get(key)
+      //
     }
 
     // fault injection
