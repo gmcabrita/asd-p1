@@ -6,10 +6,13 @@ import asd._
 
 import akka.actor.{ActorRef, Props, ActorSystem}
 
+import com.typesafe.config.ConfigFactory
+import java.io.File
+
 import asd.message._
 
 object KVStore extends App {
-  implicit val system = ActorSystem("MAIN")
+  implicit val system = ActorSystem("MAIN", ConfigFactory.parseFile(new File("src/main/resources/main.conf")))
 
   val eval = system.actorOf(Props(new DistributedEvaluation(
     1000, // num keys

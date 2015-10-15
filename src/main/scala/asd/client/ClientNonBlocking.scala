@@ -39,9 +39,8 @@ class WriteSender(server: ActorRef, reply_to: ActorRef, tagmax: Int, key: String
 }
 
 class ClientNonBlocking(servers: List[ActorRef], quorum: Int, degree_of_replication: Int) extends Actor {
-  implicit val system = ActorSystem("CLIENT")
   implicit val timeout = Timeout(5 seconds)
-  val log = Logging.getLogger(system, this)
+  val log = Logging.getLogger(context.system, this)
 
   def pick_servers(key: String): List[ActorRef] = {
     val start = Math.abs(key.hashCode() % degree_of_replication)
@@ -87,7 +86,7 @@ class ClientNonBlocking(servers: List[ActorRef], quorum: Int, degree_of_replicat
             context.become(receive)
           }
           case Some(tv: TagValue) => {
-            val children = picked_servers.map(s => system.actorOf(Props(new WriteSender(s, self, tv.tag.tagmax, key, tv.value))))
+            val children = picked_servers.map(s => context.actorOf(Props(new WriteSender(s, self, tv.tag.tagmax, key, tv.value))))
             children.foreach(_ ! Start)
             context.setReceiveTimeout(timeout.duration)
             context.become(waiting_for_replica(respond_to, 0, Some(GetResult(tv.value))))
@@ -141,7 +140,7 @@ class ClientNonBlocking(servers: List[ActorRef], quorum: Int, degree_of_replicat
       }
 
       if (received + 1 == quorum) {
-        val children = picked_servers.map(s => system.actorOf(Props(new WriteSender(s, self, tagmax, key, value))))
+        val children = picked_servers.map(s => context.actorOf(Props(new WriteSender(s, self, tagmax, key, value))))
         children.foreach(_ ! Start)
         context.setReceiveTimeout(timeout.duration)
         context.become(waiting_for_acks(respond_to, 0, Ack()))
@@ -151,7 +150,7 @@ class ClientNonBlocking(servers: List[ActorRef], quorum: Int, degree_of_replicat
     }
     case None => {
       if (received + 1 == quorum) {
-        val children = picked_servers.map(s => system.actorOf(Props(new WriteSender(s, self, highest, key, value))))
+        val children = picked_servers.map(s => context.actorOf(Props(new WriteSender(s, self, highest, key, value))))
         children.foreach(_ ! Start)
         context.setReceiveTimeout(timeout.duration)
         context.become(waiting_for_acks(respond_to, 0, Ack()))
@@ -169,7 +168,7 @@ class ClientNonBlocking(servers: List[ActorRef], quorum: Int, degree_of_replicat
   def get(key: String) = {
     val picked_servers = pick_servers(key)
 
-    val children = picked_servers.map(s => system.actorOf(Props(new ReadSender(s, self, key))))
+    val children = picked_servers.map(s => context.actorOf(Props(new ReadSender(s, self, key))))
     children.foreach(_ ! Start)
     context.setReceiveTimeout(timeout.duration)
     context.become(waiting_for_get_responses(picked_servers, sender, 0, key))
@@ -178,7 +177,7 @@ class ClientNonBlocking(servers: List[ActorRef], quorum: Int, degree_of_replicat
   def put(key: String, value: String) = {
     val picked_servers = pick_servers(key)
 
-    val children = picked_servers.map(s => system.actorOf(Props(new ReadTagSender(s, self, key))))
+    val children = picked_servers.map(s => context.actorOf(Props(new ReadTagSender(s, self, key))))
     children.foreach(_ ! Start)
     context.setReceiveTimeout(timeout.duration)
     context.become(waiting_for_put_responses(picked_servers, sender, 0, key, value))
