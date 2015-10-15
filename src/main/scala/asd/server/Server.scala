@@ -1,5 +1,6 @@
 package asd
 
+import asd.message._
 import akka.actor.Actor
 import akka.actor.ActorRef
 import scala.collection.parallel.mutable.ParHashMap

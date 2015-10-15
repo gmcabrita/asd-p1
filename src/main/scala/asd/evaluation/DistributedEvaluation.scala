@@ -1,5 +1,6 @@
 package asd.evaluation
 
+import asd.message._
 import asd.rand.Zipf
 import asd._
 
@@ -16,17 +17,22 @@ import scala.concurrent.duration._
 import scala.util.Random
 
 import scala.concurrent.ExecutionContext.Implicits.global
+import com.typesafe.config.ConfigFactory
 
 import scala.reflect.ClassTag
 import scala.reflect._
 
-class LocalNoFailureEvaluation(number_of_keys: Int, number_of_clients: Int, number_of_servers: Int, quorum: Int, degree_of_replication: Int, seed: Int, linearizable: Boolean, max_operations: Int, faults: Int) extends Actor {
+class DistributedEvaluation(number_of_keys: Int, number_of_clients: Int, number_of_servers: Int, quorum: Int, degree_of_replication: Int, seed: Int, linearizable: Boolean, max_operations: Int, faults: Int) extends Actor {
   val zipf = new Zipf(number_of_keys, seed)
   val r = new Random(seed)
   implicit val system = ActorSystem("EVAL")
+  val remoteSystem = ActorSystem("REMOTE", ConfigFactory.load("main"))
   implicit val timeout = Timeout(10 seconds)
 
-  val servers: Vector[ActorRef] = (1 to number_of_servers).toVector.map(_ => system.actorOf(Props[Server]))
+  val servers = (1 to number_of_servers).toVector.map(i => {
+    if (i % 2 == 0) system.actorOf(Props[Server])
+    else remoteSystem.actorOf(Props[Server])
+  })
   val clients: Vector[ActorRef] = (1 to number_of_clients).toVector.map(_ => {
     if (linearizable) system.actorOf(Props(new ClientNonBlocking(servers.toList, quorum, degree_of_replication)))
     else system.actorOf(Props(new ClientNonBlockingNonLinearizable(servers.toList, quorum, degree_of_replication)))
