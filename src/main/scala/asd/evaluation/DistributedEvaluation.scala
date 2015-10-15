@@ -32,7 +32,7 @@ class DistributedEvaluation(number_of_keys: Int, number_of_clients: Int, number_
 
   val servers = (1 to number_of_servers).toVector.map(i => {
     if (i <= 6) {
-      Await.result(context.actorSelection("akka.tcp://REMOTE@127.0.0.1:2552/user/server" + i).resolveOne(), timeout.duration)
+      Await.result(context.actorSelection("akka.tcp://REMOTE@127.0.0.1:8080/user/server" + i).resolveOne(), timeout.duration)
     }
     else context.actorOf(Props[Server])
   })
