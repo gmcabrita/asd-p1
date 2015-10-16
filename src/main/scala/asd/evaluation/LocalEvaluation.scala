@@ -21,7 +21,7 @@ import scala.concurrent.ExecutionContext.Implicits.global
 import scala.reflect.ClassTag
 import scala.reflect._
 
-class LocalEvaluation(number_of_keys: Int, number_of_clients: Int, number_of_servers: Int, quorum: Int, degree_of_replication: Int, seed: Int, linearizable: Boolean, max_operations: Int, faults: Int) extends Actor {
+class LocalEvaluation(number_of_keys: Int, number_of_clients: Int, number_of_servers: Int, quorum: Int, degree_of_replication: Int, seed: Int, linearizable: Boolean, max_operations: Int, faults: Int, runs: Int) extends Actor {
   val zipf = new Zipf(number_of_keys, seed)
   val r = new Random(seed)
   implicit val system = ActorSystem("EVAL")
@@ -44,26 +44,43 @@ class LocalEvaluation(number_of_keys: Int, number_of_clients: Int, number_of_ser
   var begin: Long = 0
   var end: Long = 0
 
+  var total_time: Double = 0
+
   var run: Int = 0
-  var rw_ratio = (90, 10)
+  var rw_ratio = (10, 90)
 
   def continue(actr: ActorRef) = {
      operations -= 1
 
     if (operations == 0) {
       end = System.nanoTime
-      println("reads: " + reads)
-      println("writes: " + writes)
-      println("elapsed time: " + (end - begin)/1e6+"ms")
+      //println("reads: " + reads)
+      //println("writes: " + writes)
+      val time = (end - begin)/1e6
+      //println("elapsed time: " + time + "ms")
+      total_time += time
 
-      rw_ratio = (rw_ratio._1 - 40, rw_ratio._2 + 40)
+      //rw_ratio = (rw_ratio._1 - 40, rw_ratio._2 + 40)
       begin = System.nanoTime
       operations = max_operations
       reads = 0
       writes = 0
 
       run += 1
-      if (run == 3) sys.exit(0)
+      if (run == runs) {
+        println("Average for " + rw_ratio + " " + total_time/runs)
+        rw_ratio = (50, 50)
+        total_time = 0
+      }
+      if (run == runs*2) {
+        println("Average for " + rw_ratio + " " + total_time/runs)
+        rw_ratio = (90, 10)
+        total_time = 0
+      }
+      if (run == runs*3) {
+        println("Average for " + rw_ratio + " " + total_time/runs)
+        sys.exit(0)
+      }
     }
 
     actr ! gen_op()
