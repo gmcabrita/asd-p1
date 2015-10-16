@@ -12,13 +12,13 @@ class Server extends Actor {
   var store = new ParHashMap[String, TagValue]
   var delay: FiniteDuration = FiniteDuration(0, "millis")
 
-  def injectDelay(ops: () => Unit) = {
+  /*def injectDelay(ops: () => Unit) = {
     context.system.scheduler.scheduleOnce(delay, self, WakeUp)
     context.become({
       case WakeUp => context.unbecome()
       ops()
     }, discardOld = false)
-  }
+  }*/
 
   def receive = {
     case Write(tagmax, key, value) => {
@@ -35,10 +35,7 @@ class Server extends Actor {
         }
       }
 
-      val client = sender
-      //injectDelay({
-        /*() => */client ! Ack
-      //})
+      sender ! Ack
     }
     case ReadTag(key) => {
       val tag = store.get(key) match {
@@ -46,23 +43,17 @@ class Server extends Actor {
         case None  => None
       }
 
-      val client = sender
-      //injectDelay({
-        /*() => */client ! tag
-      //})
+      sender ! tag
     }
     case Read(key) => {
-      val client = sender
-      //injectDelay({
-        /*() => */client ! store.get(key)
-      //
+      sender ! store.get(key)
     }
 
-    // fault injection
-    case Delay(ms) => {
+    // on-demand response delays
+    /*case Delay(ms) => {
       delay = FiniteDuration(ms, "millis")
 
       sender ! Ack
-    }
+    }*/
   }
 }

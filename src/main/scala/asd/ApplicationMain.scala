@@ -14,7 +14,7 @@ import asd.message._
 object KVStore extends App {
   implicit val system = ActorSystem("MAIN", ConfigFactory.parseFile(new File("src/main/resources/main.conf")))
 
-  val eval = system.actorOf(Props(new DistributedEvaluation(
+  val eval = system.actorOf(Props(new LocalEvaluation(
     1000, // num keys
     12, // num clients
     12, // num servers
