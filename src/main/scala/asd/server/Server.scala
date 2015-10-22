@@ -55,5 +55,10 @@ class Server extends Actor {
 
       sender ! Ack
     }*/
+
+    // fault-injection
+    case Stop => {
+      context.stop(self)
+    }
   }
 }
