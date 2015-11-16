@@ -22,6 +22,9 @@ import com.typesafe.config.ConfigFactory
 import java.io.File
 import scala.concurrent.Await
 
+import akka.actor.{Deploy, AddressFromURIString}
+import akka.remote.RemoteScope
+
 import scala.reflect.ClassTag
 import scala.reflect._
 
@@ -29,21 +32,33 @@ class DistributedEvaluation(number_of_keys: Int, number_of_clients: Int, number_
   val zipf = new Zipf(number_of_keys, seed)
   val r = new Random(seed)
   implicit val timeout = Timeout(10 seconds)
+  val config = ConfigFactory.parseFile(new File("src/main/resources/deploy.conf")).resolve()
+  val system = ActorSystem("DeployerSystem", config)
+
+  val d = AddressFromURIString(config.getString("deployer.path"))
+  val s1 = AddressFromURIString(config.getString("remote1.path"))
+  val s2 = AddressFromURIString(config.getString("remote2.path"))
 
   val servers = (1 to number_of_servers).toVector.map(i => {
     if (i <= 6) {
-      Await.result(context.actorSelection("akka.tcp://REMOTE@127.0.0.1:8080/user/server" + i).resolveOne(), timeout.duration)
+      system.actorOf(Props(classOf[Server]).withDeploy(Deploy(scope = RemoteScope(s1))), "s1"+i)
     }
-    else context.actorOf(Props[Server])
+    else system.actorOf(Props(classOf[Server]).withDeploy(Deploy(scope = RemoteScope(s2))), "s2"+i)
   })
-  val clients: Vector[ActorRef] = (1 to number_of_clients).toVector.map(_ => {
-    if (linearizable) context.actorOf(Props(new ClientNonBlocking(servers.toList, quorum, degree_of_replication)))
-    else context.actorOf(Props(new ClientNonBlockingNonLinearizable(servers.toList, quorum, degree_of_replication)))
+  val clients: Vector[ActorRef] = (1 to number_of_clients).toVector.map(i => {
+    if (linearizable) {
+      //system.actorOf(Props(classOf[ClientNonBlocking], servers.toList, quorum, degree_of_replication).withDeploy(Deploy(scope = RemoteScope(s1))), "s1c"+i)
+      system.actorOf(Props(new ClientNonBlocking(servers.toList, quorum, degree_of_replication)))
+    }
+    else {
+      system.actorOf(Props(new ClientNonBlockingNonLinearizable(servers.toList, quorum, degree_of_replication)))
+      //system.actorOf(Props(classOf[ClientNonBlockingNonLinearizable], servers.toList, quorum, degree_of_replication).withDeploy(Deploy(scope = RemoteScope(s1))), "s1c"+i)
+    }
   })
 
   // fault injection
   val fault_rand = new Random()
-  r.shuffle(0 to number_of_clients - 1).take(faults).foreach(i => context.stop(servers(i)))
+  r.shuffle(0 to number_of_clients - 1).take(faults).foreach(i => servers(i) ! Stop)
 
   var operations = max_operations
   var reads: Long = 0
