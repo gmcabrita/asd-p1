@@ -57,8 +57,8 @@ class DistributedEvaluation(number_of_keys: Int, number_of_clients: Int, number_
   })
 
   // fault injection
-  //val fault_rand = new Random()
-  //r.shuffle(0 to number_of_clients - 1).take(faults).foreach(i => context.stop(servers(i)))
+  val fault_rand = new Random()
+  r.shuffle(0 to number_of_clients - 1).take(faults).foreach(i => servers(i) ! Stop)
 
   var operations = max_operations
   var reads: Long = 0
