@@ -34,8 +34,8 @@ class LocalEvaluationOneRatio(num_keys: Int, num_servers: Int, num_clients: Int,
   })
 
   // fault injection
-  //val fault_rand = new Random()
-  //r.shuffle(0 to number_of_clients - 1).take(faults).foreach(i => system.stop(servers(i)))
+  val fault_rand = new Random()
+  r.shuffle(0 to num_servers - 1).take(num_faults).foreach(i => servers(i) ! Stop)
 
   var reads: Long = 0
   var writes: Long = 0
