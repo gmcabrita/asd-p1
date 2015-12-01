@@ -25,10 +25,16 @@ class ClientNonBlockingNonLinearizable(servers: List[ActorRef], quorum: Int, deg
         tagvalue match {
           case None => {
             respond_to ! None
+            val end_time = System.nanoTime.toDouble
+            operations += 1
+            latency += (end_time - start_time)
             context.become(receive)
           }
           case Some(tv: TagValue) => {
             respond_to ! Some(GetResult(tv.value))
+            val end_time = System.nanoTime.toDouble
+            operations += 1
+            latency += (end_time - start_time)
             context.become(receive)
           }
         }
@@ -43,12 +49,18 @@ class ClientNonBlockingNonLinearizable(servers: List[ActorRef], quorum: Int, deg
           case Some(tv: TagValue) => Some(tv.value)
         }
         respond_to ! result
+        val end_time = System.nanoTime.toDouble
+        operations += 1
+        latency += (end_time - start_time)
         context.become(receive)
       } else {
         context.become(waiting_for_get_responses(picked_servers, respond_to, received + 1, key, highest))
       }
     }
     case ReceiveTimeout => {
+      val end_time = System.nanoTime.toDouble
+      operations += 1
+      latency += (end_time - start_time)
       log.warning("Timeout while waiting for get responses. Was: {}, Received: {}, Key: {}, Highest: {}", self, received, key, highest)
       respond_to ! Timedout
       context.become(receive)

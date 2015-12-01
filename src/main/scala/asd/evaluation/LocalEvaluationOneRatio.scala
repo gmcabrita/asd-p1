@@ -21,23 +21,22 @@ import scala.concurrent.ExecutionContext.Implicits.global
 import scala.reflect.ClassTag
 import scala.reflect._
 
-class LocalEvaluationOneRatio(number_of_keys: Int, number_of_clients: Int, number_of_servers: Int, quorum: Int, degree_of_replication: Int, seed: Int, linearizable: Boolean, max_operations: Int, faults: Int, rw_ratio: (Int, Int)) extends Actor {
-  val zipf = new Zipf(number_of_keys, seed)
+class LocalEvaluationOneRatio(num_keys: Int, num_servers: Int, num_clients: Int, num_replicas: Int, quorum: Int, linearizable: Boolean, run_time: Long, rw_ratio: (Int, Int), seed: Long, num_faults: Int) extends Actor {
+  val zipf = new Zipf(num_keys, seed)
   val r = new Random(seed)
   implicit val system = ActorSystem("EVAL")
-  implicit val timeout = Timeout(10 seconds)
+  implicit val timeout = Timeout(3 seconds)
 
-  val servers: Vector[ActorRef] = (1 to number_of_servers).toVector.map(_ => system.actorOf(Props[Server]))
-  val clients: Vector[ActorRef] = (1 to number_of_clients).toVector.map(_ => {
-    if (linearizable) system.actorOf(Props(new ClientNonBlocking(servers.toList, quorum, degree_of_replication)))
-    else system.actorOf(Props(new ClientNonBlockingNonLinearizable(servers.toList, quorum, degree_of_replication)))
+  val servers: Vector[ActorRef] = (1 to num_servers).toVector.map(_ => system.actorOf(Props[Server]))
+  val clients: Vector[ActorRef] = (1 to num_clients).toVector.map(_ => {
+    if (linearizable) system.actorOf(Props(new ClientNonBlocking(servers.toList, quorum, num_replicas)))
+    else system.actorOf(Props(new ClientNonBlockingNonLinearizable(servers.toList, quorum, num_replicas)))
   })
 
   // fault injection
-  val fault_rand = new Random()
-  r.shuffle(0 to number_of_clients - 1).take(faults).foreach(i => system.stop(servers(i)))
+  //val fault_rand = new Random()
+  //r.shuffle(0 to number_of_clients - 1).take(faults).foreach(i => system.stop(servers(i)))
 
-  var operations = max_operations
   var reads: Long = 0
   var writes: Long = 0
 
@@ -47,13 +46,36 @@ class LocalEvaluationOneRatio(number_of_keys: Int, number_of_clients: Int, numbe
   var run: Int = 0
 
   def continue(actr: ActorRef) = {
-     operations -= 1
+    val time = System.nanoTime
 
-    if (operations == 0) {
-      end = System.nanoTime
+    if (time - begin >= run_time * 1e6) {
+      end = time
       println("reads: " + reads)
       println("writes: " + writes)
       println("elapsed time: " + (end - begin)/1e6+"ms")
+
+      Thread.sleep(5000)
+
+      val results: Vector[Future[Any]] = clients.map(c => ask(c, Stop))
+      val final_results = Future.fold[Any, (Double, Double, Double)](results)((0, Double.MinValue, Double.MaxValue))((acc, r) => {
+        (acc, r) match {
+          case ((avg, high, low), AvgLatency(v)) => {
+            if (v > high) (avg + v, v, low)
+            else if (v < low) (avg + v, high, v)
+            else (avg + v, high, low)
+          }
+        }
+      })
+
+      Await.result(final_results, 1 second).asInstanceOf[(Double, Double, Double)] match {
+        case (avg, high, low) => {
+          println("Average client latency: " + avg / results.length)
+          println("Highest client latency: " + high)
+          println("Lowest client latency: " + low)
+        }
+      }
+
+      Thread.sleep(2000)
 
       sys.exit(0)
     }
@@ -77,7 +99,6 @@ class LocalEvaluationOneRatio(number_of_keys: Int, number_of_clients: Int, numbe
   def receive = {
     case Start => {
       begin = System.nanoTime
-      operations -= number_of_clients
       clients.foreach(_ ! gen_op())
     }
     case _ => continue(sender)

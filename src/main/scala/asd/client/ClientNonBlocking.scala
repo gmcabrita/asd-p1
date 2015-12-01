@@ -15,32 +15,13 @@ import scala.concurrent.duration._
 import akka.event.Logging
 import akka.event.LoggingAdapter
 
-class ReadSender(server: ActorRef, reply_to: ActorRef, key: String) extends Actor {
-  def receive = {
-    case Start => server ! Read(key)
-    case Some(tv: TagValue) => reply_to ! Some(tv)
-    case None =>  reply_to ! None
-  }
-}
-
-class ReadTagSender(server: ActorRef, reply_to: ActorRef, key: String) extends Actor {
-  def receive = {
-    case Start => server ! ReadTag(key)
-    case Some(t: Tag) => reply_to ! Some(t)
-    case None =>  reply_to ! None
-  }
-}
-
-class WriteSender(server: ActorRef, reply_to: ActorRef, tagmax: Int, key: String, value: String) extends Actor {
-  def receive = {
-    case Start => server ! Write(tagmax, key, value)
-    case Ack => reply_to ! Ack
-  }
-}
-
 class ClientNonBlocking(servers: List[ActorRef], quorum: Int, degree_of_replication: Int) extends Actor {
-  implicit val timeout = Timeout(5 seconds)
+  implicit val timeout = Timeout(3 seconds)
   val log = Logging.getLogger(context.system, this)
+
+  var operations: Double = 0
+  var latency: Double = 0
+  var start_time: Double = 0
 
   def pick_servers(key: String): List[ActorRef] = {
     val start = Math.abs(key.hashCode() % degree_of_replication)
@@ -56,6 +37,10 @@ class ClientNonBlocking(servers: List[ActorRef], quorum: Int, degree_of_replicat
   def waiting_for_replica(respond_to: ActorRef, received: Int, result: Option[GetResult]): Receive = {
     case Ack => {
       if (received + 1 == quorum) {
+        val end_time = System.nanoTime.toDouble
+        operations += 1
+        latency += (end_time - start_time)
+
         respond_to ! result
         context.become(receive)
       } else {
@@ -63,6 +48,10 @@ class ClientNonBlocking(servers: List[ActorRef], quorum: Int, degree_of_replicat
       }
     }
     case ReceiveTimeout => {
+      val end_time = System.nanoTime.toDouble
+      operations += 1
+      latency += (end_time - start_time)
+
       log.warning("Timeout on replication. Was: {}, Received: {}, Result: {}", self, received, result)
       respond_to ! Timedout
       context.become(receive)
@@ -83,11 +72,14 @@ class ClientNonBlocking(servers: List[ActorRef], quorum: Int, degree_of_replicat
         tagvalue match {
           case None => {
             respond_to ! None
+            val end_time = System.nanoTime.toDouble
+            operations += 1
+            latency += (end_time - start_time)
+
             context.become(receive)
           }
           case Some(tv: TagValue) => {
-            val children = picked_servers.map(s => context.actorOf(Props(new WriteSender(s, self, tv.tag.tagmax, key, tv.value))))
-            children.foreach(_ ! Start)
+            picked_servers.par.foreach(_ ! Write(tv.tag.tagmax, key, tv.value))
             context.setReceiveTimeout(timeout.duration)
             context.become(waiting_for_replica(respond_to, 0, Some(GetResult(tv.value))))
           }
@@ -102,6 +94,10 @@ class ClientNonBlocking(servers: List[ActorRef], quorum: Int, degree_of_replicat
           case None => None
           case Some(tv: TagValue) => Some(tv.value)
         }
+        val end_time = System.nanoTime.toDouble
+        operations += 1
+        latency += (end_time - start_time)
+
         respond_to ! result
         context.become(receive)
       } else {
@@ -109,15 +105,23 @@ class ClientNonBlocking(servers: List[ActorRef], quorum: Int, degree_of_replicat
       }
     }
     case ReceiveTimeout => {
+      val end_time = System.nanoTime.toDouble
+      operations += 1
+      latency += (end_time - start_time)
       log.warning("Timeout while waiting for get responses. Was: {}, Received: {}, Key: {}, Highest: {}", self, received, key, highest)
       respond_to ! Timedout
       context.become(receive)
     }
   }
 
+  ///////////////////////
+
   def waiting_for_acks(respond_to: ActorRef, received: Int, result: Ack): Receive = {
     case Ack => {
       if (received + 1 == quorum) {
+        val end_time = System.nanoTime.toDouble
+        operations += 1
+        latency += (end_time - start_time)
         respond_to ! result
         context.become(receive)
       } else {
@@ -125,6 +129,9 @@ class ClientNonBlocking(servers: List[ActorRef], quorum: Int, degree_of_replicat
       }
     }
     case ReceiveTimeout => {
+      val end_time = System.nanoTime.toDouble
+      operations += 1
+      latency += (end_time - start_time)
       log.warning("Timeout while waiting for acks. Was: {}, Received: {}", self, received)
       respond_to ! Timedout
       context.become(receive)
@@ -140,8 +147,7 @@ class ClientNonBlocking(servers: List[ActorRef], quorum: Int, degree_of_replicat
       }
 
       if (received + 1 == quorum) {
-        val children = picked_servers.map(s => context.actorOf(Props(new WriteSender(s, self, tagmax, key, value))))
-        children.foreach(_ ! Start)
+        picked_servers.par.foreach(_ ! Write(tagmax, key, value))
         context.setReceiveTimeout(timeout.duration)
         context.become(waiting_for_acks(respond_to, 0, Ack()))
       } else {
@@ -150,8 +156,7 @@ class ClientNonBlocking(servers: List[ActorRef], quorum: Int, degree_of_replicat
     }
     case None => {
       if (received + 1 == quorum) {
-        val children = picked_servers.map(s => context.actorOf(Props(new WriteSender(s, self, highest, key, value))))
-        children.foreach(_ ! Start)
+        picked_servers.par.foreach(_ ! Write(highest, key, value))
         context.setReceiveTimeout(timeout.duration)
         context.become(waiting_for_acks(respond_to, 0, Ack()))
       } else {
@@ -159,6 +164,9 @@ class ClientNonBlocking(servers: List[ActorRef], quorum: Int, degree_of_replicat
       }
     }
     case ReceiveTimeout => {
+      val end_time = System.nanoTime.toDouble
+      operations += 1
+      latency += (end_time - start_time)
       log.warning("Timeout while waiting for put responses. Was: {}, Received: {}, Key: {}, Value: {}, Highest: " + highest, self, received, key, value)
       respond_to ! Timedout
       context.become(receive)
@@ -167,18 +175,18 @@ class ClientNonBlocking(servers: List[ActorRef], quorum: Int, degree_of_replicat
 
   def get(key: String) = {
     val picked_servers = pick_servers(key)
+    start_time = System.nanoTime.toDouble
 
-    val children = picked_servers.map(s => context.actorOf(Props(new ReadSender(s, self, key))))
-    children.foreach(_ ! Start)
+    picked_servers.par.foreach(_ ! Read(key))
     context.setReceiveTimeout(timeout.duration)
     context.become(waiting_for_get_responses(picked_servers, sender, 0, key))
   }
 
   def put(key: String, value: String) = {
     val picked_servers = pick_servers(key)
+    start_time = System.nanoTime.toDouble
 
-    val children = picked_servers.map(s => context.actorOf(Props(new ReadTagSender(s, self, key))))
-    children.foreach(_ ! Start)
+    picked_servers.par.foreach(_ ! ReadTag(key))
     context.setReceiveTimeout(timeout.duration)
     context.become(waiting_for_put_responses(picked_servers, sender, 0, key, value))
   }
@@ -186,5 +194,8 @@ class ClientNonBlocking(servers: List[ActorRef], quorum: Int, degree_of_replicat
   def receive = {
     case Put(key, value) => put(key, value)
     case Get(key) => get(key)
+    case Stop => {
+      sender ! AvgLatency(latency / 1e6 / operations)
+    }
   }
 }

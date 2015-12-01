@@ -23,3 +23,4 @@ case class Delay(ms: Int) // milliseconds
 case class Timedout()
 case class Start()
 case class Stop()
+case class AvgLatency(avg: Double)
