@@ -39,27 +39,27 @@ class DistributedEvaluationOneRatio(num_keys: Int, num_servers: Int, num_clients
   })
   val clients: Vector[ActorRef] = (1 to num_clients).toVector.map(i => {
     if (linearizable) {
-      // if (i <= num_clients/2) {
-      //   system.actorOf(Props(classOf[ClientNonBlocking], servers.toList, quorum, num_replicas).withDeploy(Deploy(scope = RemoteScope(s1))), "s1c"+i)
-      // } else {
-      //   system.actorOf(Props(classOf[ClientNonBlocking], servers.toList, quorum, num_replicas).withDeploy(Deploy(scope = RemoteScope(s2))), "s2c"+i)
-      // }
-      system.actorOf(Props(classOf[ClientNonBlocking], servers.toList, quorum, num_replicas).withDeploy(Deploy(scope = RemoteScope(s1))), "s1c"+i)
-      //system.actorOf(Props(new ClientNonBlocking(servers.toList, quorum, num_replicas)))
+      if (i <= num_clients/2) {
+        system.actorOf(Props(classOf[ClientNonBlocking], servers.toList, quorum, num_replicas).withDeploy(Deploy(scope = RemoteScope(s1))), "s1c"+i)
+      } else {
+        system.actorOf(Props(classOf[ClientNonBlocking], servers.toList, quorum, num_replicas).withDeploy(Deploy(scope = RemoteScope(s2))), "s2c"+i)
+      }
+      // system.actorOf(Props(classOf[ClientNonBlocking], servers.toList, quorum, num_replicas).withDeploy(Deploy(scope = RemoteScope(s1))), "s1c"+i)
+      // system.actorOf(Props(new ClientNonBlocking(servers.toList, quorum, num_replicas)))
     }
     else {
-      // if (i <= num_clients/2) {
-      //   system.actorOf(Props(classOf[ClientNonBlockingNonLinearizable], servers.toList, quorum, num_replicas).withDeploy(Deploy(scope = RemoteScope(s1))), "s1c"+i)
-      // } else {
-      //   system.actorOf(Props(classOf[ClientNonBlockingNonLinearizable], servers.toList, quorum, num_replicas).withDeploy(Deploy(scope = RemoteScope(s2))), "s2c"+i)
-      // }
-      system.actorOf(Props(new ClientNonBlockingNonLinearizable(servers.toList, quorum, num_replicas)))
+      if (i <= num_clients/2) {
+        system.actorOf(Props(classOf[ClientNonBlockingNonLinearizable], servers.toList, quorum, num_replicas).withDeploy(Deploy(scope = RemoteScope(s1))), "s1c"+i)
+      } else {
+        system.actorOf(Props(classOf[ClientNonBlockingNonLinearizable], servers.toList, quorum, num_replicas).withDeploy(Deploy(scope = RemoteScope(s2))), "s2c"+i)
+      }
+      // system.actorOf(Props(new ClientNonBlockingNonLinearizable(servers.toList, quorum, num_replicas)))
     }
   })
 
   // fault injection
   val fault_rand = new Random()
-  r.shuffle(0 to num_servers - 1).take(num_faults).foreach(i => servers(i) ! Stop)
+  fault_rand.shuffle(0 to num_servers - 1).take(num_faults).foreach(i => servers(i) ! Stop)
 
   var reads: Long = 0
   var writes: Long = 0

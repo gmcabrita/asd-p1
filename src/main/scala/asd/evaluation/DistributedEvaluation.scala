@@ -4,13 +4,11 @@ import asd.message._
 import asd.rand.Zipf
 import asd._
 
-import akka.actor.Actor
-import akka.actor.ActorRef
-import akka.actor.ActorSystem
-import akka.actor.Props
+import akka.actor.{Actor, ActorRef, ActorSystem, Props, Deploy, AddressFromURIString}
+import akka.remote.RemoteScope
 import akka.pattern.ask
-
 import akka.util.Timeout
+
 import scala.concurrent.Await
 import scala.concurrent.Future
 import scala.concurrent.duration._
@@ -21,9 +19,6 @@ import com.typesafe.config.ConfigFactory
 
 import java.io.File
 import scala.concurrent.Await
-
-import akka.actor.{Deploy, AddressFromURIString}
-import akka.remote.RemoteScope
 
 import scala.reflect.ClassTag
 import scala.reflect._
