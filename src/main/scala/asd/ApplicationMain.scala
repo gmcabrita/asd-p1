@@ -3,6 +3,7 @@ package asd
 import asd.evaluation.LocalEvaluation
 import asd.evaluation.LocalEvaluationOneRatio
 import asd.evaluation.DistributedEvaluation
+import asd.evaluation.DistributedEvaluationOneRatio
 import asd._
 
 import akka.actor.{ActorRef, Props, ActorSystem}
@@ -28,10 +29,10 @@ object KVStore extends App {
   //   1 // runs per case
   // )))
 
-  val eval = system.actorOf(Props(new LocalEvaluationOneRatio(
+  val eval = system.actorOf(Props(new DistributedEvaluationOneRatio(
     1000, // num keys
     12, // num servers
-    12, // num clients
+    1, // num clients
     3, // num replicas
     2, // quorum
     false, // linearizable?
