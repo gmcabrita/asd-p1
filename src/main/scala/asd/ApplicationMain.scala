@@ -14,7 +14,8 @@ import java.io.File
 import asd.message._
 
 object KVStore extends App {
-  implicit val system = ActorSystem("MAIN")
+  val config = ConfigFactory.parseFile(new File("src/main/resources/deploy.conf")).resolve()
+  implicit val system = ActorSystem("DeployerSystem", config)
 
   // val eval = system.actorOf(Props(new LocalEvaluation(
   //   1000, // num keys
