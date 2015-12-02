@@ -50,9 +50,13 @@ class LocalEvaluationOneRatio(num_keys: Int, num_servers: Int, num_clients: Int,
 
     if (time - begin >= run_time * 1e6) {
       end = time
+      val operations = reads + writes
+      val t = (end - begin)/1e6
       println("reads: " + reads)
       println("writes: " + writes)
-      println("elapsed time: " + (end - begin)/1e6+"ms")
+      println("operations: " + operations)
+      println("elapsed time: " + t + "ms")
+      println("throughput: " + ((operations*10000) / t))
 
       Thread.sleep(5000)
 
