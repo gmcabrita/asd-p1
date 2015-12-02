@@ -4,7 +4,7 @@ import asd.message._
 import asd.rand.Zipf
 import asd._
 
-import akka.actor.{Actor, ActorRef, ActorSystem, Props, Deploy, AddressFromURIString}
+import akka.actor.{Actor, ActorRef, ActorSystem, Props, Deploy, AddressFromURIString, UntypedActorFactory}
 import akka.pattern.ask
 import akka.remote.RemoteScope
 import akka.util.Timeout
@@ -40,18 +40,18 @@ class DistributedEvaluationOneRatio(num_keys: Int, num_servers: Int, num_clients
   val clients: Vector[ActorRef] = (1 to num_clients).toVector.map(i => {
     if (linearizable) {
       if (i <= num_clients/2 || num_clients == 1) {
-        system.actorOf(Props(classOf[ClientNonBlocking], servers.toList, quorum, num_replicas).withDeploy(Deploy(scope = RemoteScope(s1))), "s1c"+i)
+        system.actorOf(Props(classOf[ClientNonBlocking], (servers.toList, quorum, num_replicas)).withDeploy(Deploy(scope = RemoteScope(s1))), "s1c"+i)
       } else {
-        system.actorOf(Props(classOf[ClientNonBlocking], servers.toList, quorum, num_replicas).withDeploy(Deploy(scope = RemoteScope(s2))), "s2c"+i)
+        system.actorOf(Props(classOf[ClientNonBlocking], (servers.toList, quorum, num_replicas)).withDeploy(Deploy(scope = RemoteScope(s2))), "s2c"+i)
       }
       // system.actorOf(Props(classOf[ClientNonBlocking], servers.toList, quorum, num_replicas).withDeploy(Deploy(scope = RemoteScope(s1))), "s1c"+i)
       // system.actorOf(Props(new ClientNonBlocking(servers.toList, quorum, num_replicas)))
     }
     else {
       if (i <= num_clients/2 || num_clients == 1) {
-        system.actorOf(Props(classOf[ClientNonBlockingNonLinearizable], servers.toList, quorum, num_replicas).withDeploy(Deploy(scope = RemoteScope(s1))), "s1c"+i)
+        system.actorOf(Props(classOf[ClientNonBlockingNonLinearizable], (servers.toList, quorum, num_replicas)).withDeploy(Deploy(scope = RemoteScope(s1))), "s1c"+i)
       } else {
-        system.actorOf(Props(classOf[ClientNonBlockingNonLinearizable], servers.toList, quorum, num_replicas).withDeploy(Deploy(scope = RemoteScope(s2))), "s2c"+i)
+        system.actorOf(Props(classOf[ClientNonBlockingNonLinearizable], (servers.toList, quorum, num_replicas)).withDeploy(Deploy(scope = RemoteScope(s2))), "s2c"+i)
       }
       //system.actorOf(Props(new ClientNonBlockingNonLinearizable(servers.toList, quorum, num_replicas)))
     }
