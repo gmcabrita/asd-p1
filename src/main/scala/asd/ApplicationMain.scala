@@ -6,7 +6,9 @@ import asd.evaluation.DistributedEvaluation
 import asd.evaluation.DistributedEvaluationOneRatio
 import asd._
 
-import akka.actor.{ActorRef, Props, ActorSystem}
+import akka.actor.{ActorRef, Props, ActorSystem, AddressFromURIString, Deploy}
+import akka.remote.RemoteScope
+
 
 import com.typesafe.config.ConfigFactory
 import java.io.File
@@ -30,6 +32,8 @@ object KVStore extends App {
   //   1 // runs per case
   // )))
 
+  val d = AddressFromURIString(config.getString("deployer.path"))
+
   val eval = system.actorOf(Props(new DistributedEvaluationOneRatio(
     1000, // num keys
     12, // num servers
@@ -40,8 +44,9 @@ object KVStore extends App {
     10000, // run time in milliseconds
     (90, 10), // rw ratio
     192371441, // seed
-    0 // number of injected faults
-  )))
+    0, // number of injected faults
+    system
+  )).withDeploy(Deploy(scope = RemoteScope(d))), "deployer")
 
   // val eval = system.actorOf(Props(new DistributedEvaluation(
   //   1000, // num keys

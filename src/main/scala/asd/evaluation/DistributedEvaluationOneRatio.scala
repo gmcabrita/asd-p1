@@ -4,7 +4,7 @@ import asd.message._
 import asd.rand.Zipf
 import asd._
 
-import akka.actor.{Actor, ActorRef, ActorSystem, Props, Deploy, AddressFromURIString, UntypedActorFactory}
+import akka.actor.{Actor, ActorRef, ActorSystem, Props, Deploy, AddressFromURIString}
 import akka.pattern.ask
 import akka.remote.RemoteScope
 import akka.util.Timeout
@@ -20,14 +20,13 @@ import com.typesafe.config.ConfigFactory
 
 import java.io.File
 
-class DistributedEvaluationOneRatio(num_keys: Int, num_servers: Int, num_clients: Int, num_replicas: Int, quorum: Int, linearizable: Boolean, run_time: Long, rw_ratio: (Int, Int), seed: Long, num_faults: Int) extends Actor {
+class DistributedEvaluationOneRatio(num_keys: Int, num_servers: Int, num_clients: Int, num_replicas: Int, quorum: Int, linearizable: Boolean, run_time: Long, rw_ratio: (Int, Int), seed: Long, num_faults: Int, system: ActorSystem) extends Actor {
   val zipf = new Zipf(num_keys, seed)
   val r = new Random(seed)
-  val config = ConfigFactory.parseFile(new File("src/main/resources/deploy.conf")).resolve()
-  implicit val system = ActorSystem("DeployerSystem", config)
   implicit val timeout = Timeout(3 seconds)
 
-  val d = AddressFromURIString(config.getString("deployer.path"))
+  val config = ConfigFactory.parseFile(new File("src/main/resources/deploy.conf")).resolve()
+
   val s1 = AddressFromURIString(config.getString("remote1.path"))
   val s2 = AddressFromURIString(config.getString("remote2.path"))
 
